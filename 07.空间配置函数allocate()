@@ -1,0 +1,48 @@
+/**
+身为一个配置器，__default_alloc_template拥有配置器的标准接口函数allocate()。此函数首先判断
+区块大小，大于128bytes就调用第一级配置器，小于128bytes就检查对应的free list。如果free list
+之内有可用的区块，就直接拿来用，如果没有可用区块，就将区块大小上调至8倍数边界，然后调用refill(),
+准备为free list重新填充空间。refill()将于稍后介绍
+**/
+///n must be>0
+static void *allocate(size_t n){
+    obj *volatile *my_free_list;
+    obj *result;
+    ///大于128就调用第一级配置器
+    if(n>(size_t)__MAX_BYTES){
+        return (malloc_alloc::allocate(n));
+    }
+    ///寻找16个free list中适当的一个
+    my_free_list=free_list+FREELIST_INDEX(n);///得到数组下标
+    result=*my_free_list;///得到此数组下标中维护的链表空间
+    if(result==0){
+            ///没有找到可用的free list，准备重新填充free-list
+        void *r=refill(ROUND_UP(n));   ///下节讲述
+        return r;
+    }
+    ///调整free list
+    *my_free_list=result->free_list_link;///此数组下标维护的第一个空间已经被用，换成下一个空间
+    return (result);
+};
+
+                               1.7空间释放函数deallocate()
+/**
+身为一个配置器，__default_alloc_template 拥有配置器标准接口函数deallocate()。该函数首先判断
+区块大小，大于128bytes就调用第一gai级配置器，小于128bytes就找出对应的free list，将区块回收。
+**/
+
+///p不可以是0
+static void deallocate(void *p,size_t n){
+    obj *q=(obj *)p;
+    obj *volatile *my_free_list;
+    ///大于128就调用第一级配置器
+    if(n>(size_t)__MAX_BYTES){
+        malloc_alloc::deallocate(p,n);
+        return;
+    }
+    ///寻找对应的free list
+    my_free_list=free_list+FREELIST_INDEX(n);
+    ///调整free list。回收区块
+    q->free_list_link=*my_free_list;
+    *my_free_list=q;
+}
