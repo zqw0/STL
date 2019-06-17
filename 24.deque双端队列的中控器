@@ -1,0 +1,37 @@
+/**
+deque是连续空间（至少逻辑上看来如此）连续线性空间总令我们联想到
+array或vector。array无法成长，vector虽可成长，却只能向尾端成长，
+而且其所谓的成长是个假象，事实上是1.寻觅更大的空间；2.将原数据复制
+过去；3.释放原空间三部曲。如果不是vector每次配置新空间时都有留下一些
+余裕，其成长假象带来的代价是相当高昂。
+
+deque是由一段一段的定量连续空间构成。一旦有必要在deque的前端或是尾端
+增加新空间，便配置一段定量连续空间，串接在整个deque的头端或尾端。deque
+的最大任务，便是在这些分段的定量连续空间上，维护其整体连续的假象，并
+提供随机存取的接口。避开了重新配置，复制，释放的轮回。代价是复杂的迭代器
+架构。
+
+受到分段连续线性空间的字面影响，我们可能认为deque的实现复杂度和vector相比
+虽不中亦不远矣，其实不然。主要因为，既曰分段连续性空间，就必须有中央控制，
+而为了维持整体连续的假象，数据结构的设计及迭代器前进后退的操作都颇为繁琐。
+deque的实现代码分量远比vector或list都多得多。
+
+deque采用一块所谓的map(注意，不是stl的map容器)作为主控。这里所谓的map是一
+小块连续空间，其中每个元素（此处称为一个节点,node）都是指针，指向另一段
+（较大的）连续性空间，称为缓冲区。缓冲区才是deque的存储空间主体。SGI STL
+允许我们制定缓冲区大小。默认值0表示将使用521bytes缓冲区
+**/
+
+template<class T,class Alloc=alloc,size_t BufSiz=0>
+class deque{
+public:         ///基本类型
+    typedef T value_type;
+    typedef value_type* pointer;
+    ...
+protected:          ///internal typedefs
+    ///元素指针的指针（pointer of pointer of T）
+    typedef pointer* map_pointer;
+    typedef map_pointer map;///指向map,map是块连续空间，其中的每个元素
+                            ///都是一个指针（称为节点），指向一块缓冲区
+    size_type map_size;     ///map内可容纳多少指针
+};
