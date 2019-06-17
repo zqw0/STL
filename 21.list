@@ -1,0 +1,12 @@
+list的节点（node）
+/**
+每一个设计过list的人都知道，list本身和List的节点是不同的结构，
+需要分开设计。以下是STL list的节点（node）结构。
+**/
+template<class T>
+struct __list_node{
+    typedef void* void_pointer;
+    void_pointer prev;
+    void_pointer next;
+    T data;
+};
