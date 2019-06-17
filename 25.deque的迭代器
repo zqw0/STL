@@ -1,0 +1,128 @@
+deque是分段连续空间。维持整体连续的假象任务，落在迭代器的operator++和oper
+ator--两个运算子身上。
+
+首先这个迭代器它必须能够支出分段连续空间在哪里。其次它必须能够判断自己是否
+已经出去其所在缓冲区的边缘，如果是。一旦前进或后退就必须跳跃至下一个或上一
+个缓冲区。为了能够正确跳跃，deque必须随时掌握掌控之心map。下面这种实现方式
+符合要求。
+template<class T,class Ref,class Ptr,size_t BufSiz>
+struct __deque_iterator{
+    typedef __deque_iterator<T,T&,T*,BufSize>   iterator;
+    typedef __deque_iterator<T,const T&,const T*,BufSiz>    const_iterator;
+    static size_t buffer_size(){return __deque_buf_size(BufSiz,sizeof(T));}
+
+    typedef random_access_iterator_tag iterator_category;
+    typedef T value_type;
+    typedef Ptr pointer;
+    typedef Ref reference;
+    typedef size_t size_type;
+    typedef ptrdiff_t difference_type;
+    typedef T** map_pointer;
+
+    typedef __deque_iterator self;
+
+    ///保持与容器的连接
+    T* cur;    ///此迭代器所指之缓冲区的现行元素
+    T* first;  ///此迭代器所指之缓冲区的头
+    T* last;   ///此迭代器所指之缓冲区的尾
+    map_pointer node; ///指向掌控中心
+    ...
+};
+其中用来决定缓冲区大小的函数buffer_size(),调用__deque_buf_size(),
+后者是一个全局函数，定义如下：
+///如果n不为0，传回buffer size由用户自定义
+///如果n为0，表示buffer size使用默认值，那么
+///如果sz（元素大小，sizeof(value_type)）小于512，传回512/sz，
+///如果sz不小于512，传回1.
+inline size_t __deque_buf_size(size_t n,size_t sz){
+    return n!=0?n:(sz<512?size_t(512/sz):size_t(1));
+}
+/**
+下面是deque迭代器的几个关键行为。由于迭代器内对各种指针运算都
+进行了重载操作，所以各种指针运算如加，减，前进，后退都不能直观视之。
+其中最关键的就是：一旦行进时遇到缓冲区边缘，要特别当心，视前进或后退
+都不能直观视之。其中最关键的就是：一旦行进时遇到缓冲区边缘，要特别当
+心，视前进或后退而定，可能需要调用set_node跳一个缓冲区：
+**/
+void set_node(map_pointer new_node){
+    node=new_node;             ///更换缓冲区
+    first=*new_node;           ///new_node为二维指针，指向指针的指针。*new_node为缓冲区首地址
+    last=first+difference_type(buffer_size());///头+缓冲区长度
+}
+
+///以下各个重载运算子是__deque_iterator<>成功运作的关键
+
+reference operator*() const {return *cur;}///返回迭代器当前的元素，即一级指针cur所指
+pointer operator->() const {return &(operator*());}///返回数据元素的成员
+
+difference_type operator-(const self& x)const {
+    return difference_type(buffer_size())*(node-x.node-1)+///中间有几个缓冲区*缓冲区大小
+    (cur-first)+(x.last-x.cur);///大-小，算上相差的两部分
+}
+
+self& operator++(){        ///前置++；
+    ++cur;                 ///切换至下一个元素
+    if(cur==last){         ///如果已达到所在缓冲区的尾端
+        set_node(node+1);  ///就切换至下一节点（亦即缓冲区）
+        cur=first;         ///的第一个元素
+    }
+    return *this;
+}
+self operator++(int){
+    self tmp=*this;
+    ++*this;
+    return tmp;
+}
+self& operator--(){
+    if(cur==first){       ///如果已达所在缓冲区的头端
+        set_node(node-1); ///就切换至前一节点（亦即缓冲区）
+        cur=last;         ///的最后一个元素（的下一位置）
+    }
+    --cur;                ///切换至前一个元素
+    return *this;
+}
+self operator--(int){
+    self tmp=*this;
+    --*this;
+    return tmp;
+}
+
+///以下实现随机存取。迭代器可以直接跳跃n个距离
+self& operator+=(difference_type n){
+    difference_type offset=n+(cur-first);
+    if(offset>=0&&offset<difference_type(buffer_size()))
+        ///目标位置在同一缓冲区内
+        cur+=n;
+    else{
+        ///标的位置不在同一缓冲区内
+        difference_type node_offset=offset>0?offset/difference_type(buffer_size())
+        : -difference_type((-offset-1)/buffer_size())-1;
+        ///切换至正确的节点（亦即缓冲区）
+        set_node(node+node_offset);
+        ///切换至正确的元素
+        cur=first+(offset-node_offset*difference_type(buffer_size()));
+    }
+    return *this;
+}
+
+self operator+(difference_type n) const {
+    self tmp=*this;
+    return tmp+=n;///调用operator+=；
+}
+
+self& operator-=(difference_type n){return *this+=-n;}
+///以上利用operator+=来完成operator-=；
+
+self operator-(difference_type n)const {
+    self tmp=*this;
+    return tmp-=n;
+}
+
+///以下实现随机存取。迭代器可以直接跳跃n个距离
+reference operator[](difference_type n) const {return *(*this+n);}
+
+bool operator==(const self& x)const {return cur==x.cur;}
+bool operator!=(const self* x) const {return !(*this==x);}
+bool operator<(const self& x) const {
+    return (node==x.node)?(cur<x.cur):(node<x.node);
+}
