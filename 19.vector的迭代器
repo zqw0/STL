@@ -1,0 +1,11 @@
+/**
+vector维护的是一个连续线性空间，所以不论其元素型别为何，普通指针都可以作为vector的迭代器而满足
+所有必要条件，因为vector迭代器所需要的操作行为，如operator*,operator->,operator++,operator--,
+operator+,operator-,operator+=,operator-=,普通指针天生就具备。vector支持随机存取，而普通指针正
+有着这样的能力。所以vector提供的是random access iterators.
+**/
+
+根据上述定义，如果客户端写出这样的代码：
+vector<int>::iterator ivite;
+vector<Shape>::iterator svite;
+ivite 的型别就是int*,svite的型别就是shape*;
