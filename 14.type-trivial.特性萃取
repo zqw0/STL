@@ -1,0 +1,7 @@
+/**
+所谓的特性萃取是指这个型别是否具备non-trivial defalt ctor?
+是否具备non-copy-ctor?是否具备non-trivial assignment operator?
+是否具备 non-trivial-dtor?如果答案是否定的，我们在对这个型别进行构造，析构，拷贝，复制等操作时
+就可以采用最有效率的措施（例如根本不调用constructor,destructor）,而采用内存直接处理操作如malloc
+，memcpy，等等，获得最高效率，这对于大规模而操作频繁的容易有着显著的提醒。
+**/
