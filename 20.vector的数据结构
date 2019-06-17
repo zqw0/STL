@@ -1,0 +1,575 @@
+/**
+vector所采用的数据非常简单：线性连续空间。它以两个迭代器start和finish分别指向配置得来的
+连续空间中目前已被使用的范围，并以迭代器end_of_storage指向整块连续空间（含备用空间）的
+尾端：
+
+为了降低空间配置时的速度成本，vector实际配置的大小可能比客户端需求量大一些，已备将来可能的
+扩充。这便是容易的概念。换句话说，一个vector的容量永远大于或等于其大小。一旦容量等于大小，
+便是满载，下次再有新增元素，整个vector就得另觅居所。
+**/
+                4.25vector的构造与内存管理：constructor,push_back
+vector缺省使用alloc作为空间配置器，并根据另外定义了一个data_allocator，为的是更方便以
+元素大小为配置单位：
+class vector{
+protected:
+template<class T,class Alloc=alloc> data_allocator;
+...
+};
+
+于是，data_allocator::allocate(n) 表示配置n个元素空间。
+vector提供许多constructor,其中一个允许我们制定空间大小及初值：
+///构造函数，允许制定vector大小n和初值value。
+vector(size_type n,const T&value){fill_initialize(n,value);}
+///填充并予以初始化
+void fill_initialize(size_type n,const T& value){
+    start=allocate_and_fill(n,value);
+    finish=start+n;
+    end_of_storage=finish;
+}
+
+///配置后填充
+iterator allocate_and_fill(size_type n,const T& x){
+    iterator result=data_allocator::allocate(n);///配置n个元素空间
+    uninitialized_fill_n(result,n,x);///全局函数。
+    return result;
+}
+
+/**
+当我们以push_back()将元素插入于vector尾端时，该函数首先检查是否还有
+备用空间，如果有就直接在备用空间上构造函数，并调整迭代器finish，使
+vector变大。如果没有备用空间了，就扩充空间（重新配置，移动数据，释
+放原空间）：
+**/
+void push_back(const T& x){
+    if(finish!=end_of_storage){
+        if(finish!=end_of_storage){///还有备用空间
+            construct(finish,x);
+            ++finish;
+        }
+        else{
+            inser_aux(end(),x);
+        }
+    }
+}
+template<class T,class Alloc>
+void vector<T,Alloc>::inser_aux(iterator position,const T& x){
+    if(finish!=end_of_storage){///还有备用空间
+        ///在备用空间起初始构造一个元素，并以vector最后一个元素值为其初值
+        ///此函数还有可能被insert调用
+        construct(finish,*(finish-1));
+        ///调整水位
+        ++finish;
+        T x_copy=x;
+        copy_backward(position,finish-2,finish-1);
+        *position =x_copy;
+    }
+    else{///已经没有备用空间
+        const size_type old_size()=size();
+        const size_type len=old_size!=0?old_size*2:1;
+        ///以上配置原则：如果原大小为0，则配置1个元素大小
+        ///如果原大小不为0，则配置原大小的两倍，
+        ///前半段用来放置原数据，后半段准备用来放置新数据
+
+        iterator new_start=data_allocator::allocate(len);///实际配置
+        iterator new_finish=new_start;
+        try{
+            ///将原vector的内容拷贝到新vector
+            new_finish=uninitialized_copy(start,position,new_start);
+            ///为新元素设定初始值x
+            construct(new_finish,x);
+            ///调整水位
+            ++new_finish;
+            ///将安插点的原内容也拷贝过来。本函数有可能被insert函数调用
+            new_finish=uninitialized_copy(position,finish,new_finish);
+        }
+        catch{
+            destory(new_start,new_finish);
+            data_allocator::deallocate(new_start,len);
+            throw;
+        }
+
+        ///析构并释放原vector
+        destroy(begin(),end());
+        deallocate();
+
+        ///调整迭代器，指向新vector
+        start=new_start;
+        finish=new_finish;
+        end_of_storage=new_start+len;
+    }
+}
+/**
+动态增加大小，并不是在原空间之后接续新空间（因为无法保证原空间之后尚有可供
+配置的空间），而是以原大小的两倍另外配置一块较大空间，然后将原内容拷贝过来
+，然后才开始在原内容之后构造新元素，并释放原空间。因此，对vector的任何操作
+，一旦引起空间重新配置，指向原vector的所有迭代器就都失效了。
+**/
+                4.25vector的构造与内存管理：constructor,push_back
+vector缺省使用alloc作为空间配置器，并根据另外定义了一个data_allocator，为的是更方便以
+元素大小为配置单位：
+class vector{
+protected:
+template<class T,class Alloc=alloc> data_allocator;
+...
+};
+
+于是，data_allocator::allocate(n) 表示配置n个元素空间。
+vector提供许多constructor,其中一个允许我们制定空间大小及初值：
+///构造函数，允许制定vector大小n和初值value。
+vector(size_type n,const T&value){fill_initialize(n,value);}
+///填充并予以初始化
+void fill_initialize(size_type n,const T& value){
+    start=allocate_and_fill(n,value);
+    finish=start+n;
+    end_of_storage=finish;
+}
+
+///配置后填充
+iterator allocate_and_fill(size_type n,const T& x){
+    iterator result=data_allocator::allocate(n);///配置n个元素空间
+    uninitialized_fill_n(result,n,x);///全局函数。
+    return result;
+}
+
+/**
+当我们以push_back()将元素插入于vector尾端时，该函数首先检查是否还有
+备用空间，如果有就直接在备用空间上构造函数，并调整迭代器finish，使
+vector变大。如果没有备用空间了，就扩充空间（重新配置，移动数据，释
+放原空间）：
+**/
+void push_back(const T& x){
+    if(finish!=end_of_storage){
+        if(finish!=end_of_storage){///还有备用空间
+            construct(finish,x);
+            ++finish;
+        }
+        else{
+            inser_aux(end(),x);
+        }
+    }
+}
+template<class T,class Alloc>
+void vector<T,Alloc>::inser_aux(iterator position,const T& x){
+    if(finish!=end_of_storage){///还有备用空间
+        ///在备用空间起初始构造一个元素，并以vector最后一个元素值为其初值
+        ///此函数还有可能被insert调用
+        construct(finish,*(finish-1));
+        ///调整水位
+        ++finish;
+        T x_copy=x;
+        copy_backward(position,finish-2,finish-1);
+        *position =x_copy;
+    }
+    else{///已经没有备用空间
+        const size_type old_size()=size();
+        const size_type len=old_size!=0?old_size*2:1;
+        ///以上配置原则：如果原大小为0，则配置1个元素大小
+        ///如果原大小不为0，则配置原大小的两倍，
+        ///前半段用来放置原数据，后半段准备用来放置新数据
+
+        iterator new_start=data_allocator::allocate(len);///实际配置
+        iterator new_finish=new_start;
+        try{
+            ///将原vector的内容拷贝到新vector
+            new_finish=uninitialized_copy(start,position,new_start);
+            ///为新元素设定初始值x
+            construct(new_finish,x);
+            ///调整水位
+            ++new_finish;
+            ///将安插点的原内容也拷贝过来。本函数有可能被insert函数调用
+            new_finish=uninitialized_copy(position,finish,new_finish);
+        }
+        catch{
+            destory(new_start,new_finish);
+            data_allocator::deallocate(new_start,len);
+            throw;
+        }
+
+        ///析构并释放原vector
+        destroy(begin(),end());
+        deallocate();
+
+        ///调整迭代器，指向新vector
+        start=new_start;
+        finish=new_finish;
+        end_of_storage=new_start+len;
+    }
+}
+/**
+动态增加大小，并不是在原空间之后接续新空间（因为无法保证原空间之后尚有可供
+配置的空间），而是以原大小的两倍另外配置一块较大空间，然后将原内容拷贝过来
+，然后才开始在原内容之后构造新元素，并释放原空间。因此，对vector的任何操作
+，一旦引起空间重新配置，指向原vector的所有迭代器就都失效了。
+**/
+
+                4.25vector的构造与内存管理：constructor,push_back
+vector缺省使用alloc作为空间配置器，并根据另外定义了一个data_allocator，为的是更方便以
+元素大小为配置单位：
+class vector{
+protected:
+template<class T,class Alloc=alloc> data_allocator;
+...
+};
+
+于是，data_allocator::allocate(n) 表示配置n个元素空间。
+vector提供许多constructor,其中一个允许我们制定空间大小及初值：
+///构造函数，允许制定vector大小n和初值value。
+vector(size_type n,const T&value){fill_initialize(n,value);}
+///填充并予以初始化
+void fill_initialize(size_type n,const T& value){
+    start=allocate_and_fill(n,value);
+    finish=start+n;
+    end_of_storage=finish;
+}
+
+///配置后填充
+iterator allocate_and_fill(size_type n,const T& x){
+    iterator result=data_allocator::allocate(n);///配置n个元素空间
+    uninitialized_fill_n(result,n,x);///全局函数。
+    return result;
+}
+
+/**
+当我们以push_back()将元素插入于vector尾端时，该函数首先检查是否还有
+备用空间，如果有就直接在备用空间上构造函数，并调整迭代器finish，使
+vector变大。如果没有备用空间了，就扩充空间（重新配置，移动数据，释
+放原空间）：
+**/
+void push_back(const T& x){
+    if(finish!=end_of_storage){
+        if(finish!=end_of_storage){///还有备用空间
+            construct(finish,x);
+            ++finish;
+        }
+        else{
+            inser_aux(end(),x);
+        }
+    }
+}
+template<class T,class Alloc>
+void vector<T,Alloc>::inser_aux(iterator position,const T& x){
+    if(finish!=end_of_storage){///还有备用空间
+        ///在备用空间起初始构造一个元素，并以vector最后一个元素值为其初值
+        ///此函数还有可能被insert调用
+        construct(finish,*(finish-1));
+        ///调整水位
+        ++finish;
+        T x_copy=x;
+        copy_backward(position,finish-2,finish-1);
+        *position =x_copy;
+    }
+    else{///已经没有备用空间
+        const size_type old_size()=size();
+        const size_type len=old_size!=0?old_size*2:1;
+        ///以上配置原则：如果原大小为0，则配置1个元素大小
+        ///如果原大小不为0，则配置原大小的两倍，
+        ///前半段用来放置原数据，后半段准备用来放置新数据
+
+        iterator new_start=data_allocator::allocate(len);///实际配置
+        iterator new_finish=new_start;
+        try{
+            ///将原vector的内容拷贝到新vector
+            new_finish=uninitialized_copy(start,position,new_start);
+            ///为新元素设定初始值x
+            construct(new_finish,x);
+            ///调整水位
+            ++new_finish;
+            ///将安插点的原内容也拷贝过来。本函数有可能被insert函数调用
+            new_finish=uninitialized_copy(position,finish,new_finish);
+        }
+        catch{
+            destory(new_start,new_finish);
+            data_allocator::deallocate(new_start,len);
+            throw;
+        }
+
+        ///析构并释放原vector
+        destroy(begin(),end());
+        deallocate();
+
+        ///调整迭代器，指向新vector
+        start=new_start;
+        finish=new_finish;
+        end_of_storage=new_start+len;
+    }
+}
+/**
+动态增加大小，并不是在原空间之后接续新空间（因为无法保证原空间之后尚有可供
+配置的空间），而是以原大小的两倍另外配置一块较大空间，然后将原内容拷贝过来
+，然后才开始在原内容之后构造新元素，并释放原空间。因此，对vector的任何操作
+，一旦引起空间重新配置，指向原vector的所有迭代器就都失效了。
+**/
+
+                               4.25vector的构造与内存管理：constructor,push_back
+vector缺省使用alloc作为空间配置器，并根据另外定义了一个data_allocator，为的是更方便以
+元素大小为配置单位：
+class vector{
+protected:
+template<class T,class Alloc=alloc> data_allocator;
+...
+};
+
+于是，data_allocator::allocate(n) 表示配置n个元素空间。
+vector提供许多constructor,其中一个允许我们制定空间大小及初值：
+///构造函数，允许制定vector大小n和初值value。
+vector(size_type n,const T&value){fill_initialize(n,value);}
+///填充并予以初始化
+void fill_initialize(size_type n,const T& value){
+    start=allocate_and_fill(n,value);
+    finish=start+n;
+    end_of_storage=finish;
+}
+
+///配置后填充
+iterator allocate_and_fill(size_type n,const T& x){
+    iterator result=data_allocator::allocate(n);///配置n个元素空间
+    uninitialized_fill_n(result,n,x);///全局函数。
+    return result;
+}
+
+/**
+当我们以push_back()将元素插入于vector尾端时，该函数首先检查是否还有
+备用空间，如果有就直接在备用空间上构造函数，并调整迭代器finish，使
+vector变大。如果没有备用空间了，就扩充空间（重新配置，移动数据，释
+放原空间）：
+**/
+void push_back(const T& x){
+    if(finish!=end_of_storage){
+        if(finish!=end_of_storage){///还有备用空间
+            construct(finish,x);
+            ++finish;
+        }
+        else{
+            inser_aux(end(),x);
+        }
+    }
+}
+template<class T,class Alloc>
+void vector<T,Alloc>::inser_aux(iterator position,const T& x){
+    if(finish!=end_of_storage){///还有备用空间
+        ///在备用空间起初始构造一个元素，并以vector最后一个元素值为其初值
+        ///此函数还有可能被insert调用
+        construct(finish,*(finish-1));
+        ///调整水位
+        ++finish;
+        T x_copy=x;
+        copy_backward(position,finish-2,finish-1);
+        *position =x_copy;
+    }
+    else{///已经没有备用空间
+        const size_type old_size()=size();
+        const size_type len=old_size!=0?old_size*2:1;
+        ///以上配置原则：如果原大小为0，则配置1个元素大小
+        ///如果原大小不为0，则配置原大小的两倍，
+        ///前半段用来放置原数据，后半段准备用来放置新数据
+
+        iterator new_start=data_allocator::allocate(len);///实际配置
+        iterator new_finish=new_start;
+        try{
+            ///将原vector的内容拷贝到新vector
+            new_finish=uninitialized_copy(start,position,new_start);
+            ///为新元素设定初始值x
+            construct(new_finish,x);
+            ///调整水位
+            ++new_finish;
+            ///将安插点的原内容也拷贝过来。本函数有可能被insert函数调用
+            new_finish=uninitialized_copy(position,finish,new_finish);
+        }
+        catch{
+            destory(new_start,new_finish);
+            data_allocator::deallocate(new_start,len);
+            throw;
+        }
+
+        ///析构并释放原vector
+        destroy(begin(),end());
+        deallocate();
+
+        ///调整迭代器，指向新vector
+        start=new_start;
+        finish=new_finish;
+        end_of_storage=new_start+len;
+    }
+}
+/**
+动态增加大小，并不是在原空间之后接续新空间（因为无法保证原空间之后尚有可供
+配置的空间），而是以原大小的两倍另外配置一块较大空间，然后将原内容拷贝过来
+，然后才开始在原内容之后构造新元素，并释放原空间。因此，对vector的任何操作
+，一旦引起空间重新配置，指向原vector的所有迭代器就都失效了。
+**/
+
+
+                4.25vector的构造与内存管理：constructor,push_back
+vector缺省使用alloc作为空间配置器，并根据另外定义了一个data_allocator，为的是更方便以
+元素大小为配置单位：
+class vector{
+protected:
+template<class T,class Alloc=alloc> data_allocator;
+...
+};
+
+于是，data_allocator::allocate(n) 表示配置n个元素空间。
+vector提供许多constructor,其中一个允许我们制定空间大小及初值：
+///构造函数，允许制定vector大小n和初值value。
+vector(size_type n,const T&value){fill_initialize(n,value);}
+///填充并予以初始化
+void fill_initialize(size_type n,const T& value){
+    start=allocate_and_fill(n,value);
+    finish=start+n;
+    end_of_storage=finish;
+}
+
+///配置后填充
+iterator allocate_and_fill(size_type n,const T& x){
+    iterator result=data_allocator::allocate(n);///配置n个元素空间
+    uninitialized_fill_n(result,n,x);///全局函数。
+    return result;
+}
+
+/**
+当我们以push_back()将元素插入于vector尾端时，该函数首先检查是否还有
+备用空间，如果有就直接在备用空间上构造函数，并调整迭代器finish，使
+vector变大。如果没有备用空间了，就扩充空间（重新配置，移动数据，释
+放原空间）：
+**/
+void push_back(const T& x){
+    if(finish!=end_of_storage){
+        if(finish!=end_of_storage){///还有备用空间
+            construct(finish,x);
+            ++finish;
+        }
+        else{
+            inser_aux(end(),x);
+        }
+    }
+}
+template<class T,class Alloc>
+void vector<T,Alloc>::inser_aux(iterator position,const T& x){
+    if(finish!=end_of_storage){///还有备用空间
+        ///在备用空间起初始构造一个元素，并以vector最后一个元素值为其初值
+        ///此函数还有可能被insert调用
+        construct(finish,*(finish-1));
+        ///调整水位
+        ++finish;
+        T x_copy=x;
+        copy_backward(position,finish-2,finish-1);
+        *position =x_copy;
+    }
+    else{///已经没有备用空间
+        const size_type old_size()=size();
+        const size_type len=old_size!=0?old_size*2:1;
+        ///以上配置原则：如果原大小为0，则配置1个元素大小
+        ///如果原大小不为0，则配置原大小的两倍，
+        ///前半段用来放置原数据，后半段准备用来放置新数据
+
+        iterator new_start=data_allocator::allocate(len);///实际配置
+        iterator new_finish=new_start;
+        try{
+            ///将原vector的内容拷贝到新vector
+            new_finish=uninitialized_copy(start,position,new_start);
+            ///为新元素设定初始值x
+            construct(new_finish,x);
+            ///调整水位
+            ++new_finish;
+            ///将安插点的原内容也拷贝过来。本函数有可能被insert函数调用
+            new_finish=uninitialized_copy(position,finish,new_finish);
+        }
+        catch{
+            destory(new_start,new_finish);
+            data_allocator::deallocate(new_start,len);
+            throw;
+        }
+
+        ///析构并释放原vector
+        destroy(begin(),end());
+        deallocate();
+
+        ///调整迭代器，指向新vector
+        start=new_start;
+        finish=new_finish;
+        end_of_storage=new_start+len;
+    }
+}
+/**
+动态增加大小，并不是在原空间之后接续新空间（因为无法保证原空间之后尚有可供
+配置的空间），而是以原大小的两倍另外配置一块较大空间，然后将原内容拷贝过来
+，然后才开始在原内容之后构造新元素，并释放原空间。因此，对vector的任何操作
+，一旦引起空间重新配置，指向原vector的所有迭代器就都失效了。
+**/
+
+               4.2.6vector的元素操作：pop_back,erase,clear,insert
+ ///将尾端元素拿掉，并调整大小
+void pop_back(){
+    --finish;
+    destroy(finish);
+}
+
+///清楚[first,last)中的所有元素
+iterator erase(iterator first,iterator last){
+    iterator i=copy(last,finish,first);
+    destroy(i,finish);
+    finish=finish-(last-first);
+    return first;
+}
+
+///清除某个位置上的元素
+iterator erase(iterator first,iterator last){
+    if(position+1!=end())
+        copy(position+1,finish,position);
+    --finish;
+    destroy(finish);
+    return position;
+}
+void clear(){erase(begin(),end());}
+
+template<class T,class Alloc>
+void vector<T,Alloc>::insert(iterator position,size_type n=1,const T& x){
+    if(n!=0){
+        if(size_type(end_of_storage-finish)>=n){
+            ///备用空间大于等于“新增元素个数”
+            T x_copy=x;
+            ///以下计算插入点之后的现有元素个数
+            const size_type elems_after=finish-position;
+            iterator old_finish=finish;
+            if(elems_after>n){
+                ///插入点之后的现有元素个数大于新增元素个数
+                uninitialized_copy(finish-n,finish,finish);
+                finish+=n;///将vector尾端标记后移
+                copy_backward(position,old_finish-n,old_finish);
+                fill(position,position+n,x_copy);
+            }
+            else{
+                ///插入点之后的现有元素个数小于等于新增元素个数
+                uninitialized_fill_n(finish,n-elems_after,x_copy);
+                finish+=n-elems_after;
+                uninitialized_copy(position,old_finish,finish);
+                finish+=elems_after;
+                fill(position,old_finish,x_copy);
+            }
+        }
+        else{
+            ///备用空间小于新增元素个数，必须配置额外空间
+            ///首先决定新长度：旧长度的两倍，或旧长度+新增元素个数
+            const size_type old_size=size();
+            const size_type len=old_size+max(old_size,n);
+            ///一下配置新的vector空间
+            iterator new_start=data_allocator::allocate(len);
+            iterator new_finish=new_start;
+            __STL_TRY{
+                ///以下首先将旧vector的插入点之前的元素复制到新空间
+                new_finish=uninitialized_copy(start,position,new_start);
+                ///以下再将新增元素（初值皆为n）填入新空间
+                new_finish=uninitialized_fill_n(new_finish,n,x);
+                ///以下再将旧vector的插入点之后的元素复制到新空间
+                new_finish=uninitialized_copy(position,finish,new_finish);
+            }
+            ///以下清除并释放旧的vector
+            destroy(start,finish);
+            deallocate();
+            ///以下调整水位标记
+            start=new_start;
+            finish=new_finish;
+            end_of_storage=new_start+len;
+        }
+    }
+}
