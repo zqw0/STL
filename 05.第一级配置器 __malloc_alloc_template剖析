@@ -1,0 +1,88 @@
+template<int inst>
+class __malloc_alloc_template{
+private:
+    ///以下函数将用来处理内存不足的情况
+    ///oom:out of memory
+    static void *oom_malloc(size_t);
+    static void *oom_realloc(void *,size_t);
+    static void (* __malloc_alloc_oom_handler)();
+
+public:
+
+    static void *allocate(size_t n){
+        void *result=malloc(n); ///第一级配置器直接使用malloc()
+        ///以下无法满足需求时，改用 oom_malloc()
+        if(0==result) result=oom_malloc(n);
+        return result;
+    }
+
+    static void deallocate(void *p,size_t ){
+        free(p); ///第一级配置器直接使用free()
+    }
+
+    static void *reallocate(void *p,size_t,size_t new_sz){
+        void *result=realloc(p,new_sz);   ///第一级配置器直接使用realloc();
+        ///以下无法满足需求时，改用oom_realloc()
+        if(0==result)  result=oom_realloc(p,new_sz);
+        return result;
+    }
+
+    ///以下仿真C++的 set_new_handler()。换句话说，你可以通过它
+    ///指定你自己的out_of_memory handler
+    static void (* set_malloc_handler(void (*f)()))(){///f为传参的函数指针。set_malloc_handler
+        void (* old)()=__malloc_alloc_oom_handler;    ///为函数名。返回值类型为函数指针。
+        __malloc_alloc_oom_handler=f;
+        return (old);
+    }
+};
+
+///malloc_alloc out-of-memory handing
+///初始值为0.有待客端设定
+
+template <int inst>
+void (* __malloc_alloc_template<inst>::__malloc_alloc_oom_handler)()=0;
+
+template <int inst>
+void * __malloc_alloc_template<inst>::oom_malloc(size_t n){
+    void (* my_malloc_handler)();
+    void *result;
+
+    for(;;){                      ///不断尝试释放，配置，再释放，再配置。。
+        my_malloc_handler=__malloc_alloc_oom_handler;
+        if(0==my_malloc_handler) {__THROW_BAD_ALLOC;}
+        (*my_malloc_handler)();   ///调用处理例程，企图释放内存
+        result=malloc(n);         ///再次尝试配置内存
+        if(result) return (result);
+    }
+}
+
+template<int inst>
+void *__malloc_alloc_template<inst>::oom_realloc(void *p,size_t n){
+    void (* my_malloc_handler)();
+    void *result;
+
+    for(;;){
+        my_malloc_handler();
+        void *result;
+        for(;;){                      ///不断尝试释放，配置，再释放，再配置。。
+            my_malloc_handler=__malloc_alloc_oom_handler;
+            if(0==my_malloc_handler){__THROW_BAD_ALLOC;}
+            (*my_malloc_handler)();   ///调用处理例程，企图释放内存
+            result=realloc(p,n);         ///再次尝试配置内存
+            if(result) return (result);
+        }
+    }
+}
+
+///注意以下直接将参数inst指定为0
+typedef __malloc_alloc_template<0> malloc_alloc;
+
+/**
+第一级配置器以malloc(),free(),realloc() 等C函数执行实际的内存配置，释放
+，重配置操作，并实现类似C++ new-handler 的机制。是的，他不能直接运用C++ new-handler机制，
+因为它并非使用::operator new 来配置内存。
+
+所谓的C++ new handler 机制是，你可以要求系统在内存配置需求不发被满足时，调用一个你所指定的函数。换句话说，一旦
+::operator new 无法完成任务，
+在丢出std::bad_alloc 异常状态之前，会调用客户端指定的处理历程。该处理例程通常既被称为new-handler。
+**/
