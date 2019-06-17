@@ -1,0 +1,44 @@
+/**
+typename的用法：
+//下面来讨论typename的第二种用法。现在假设我们有一个类如下：
+   template <typename T> class Y
+   {
+       T::iterator *iter;
+       ...
+   };
+
+    我们可能本意是想定义一个迭代器对象，例如我们如果用vector<int>来实例化这个模板，那么iter
+   则应该是一个迭代器指针，但是，如果我们用下面这个类来实例化这个模板：
+   class cType
+   {
+       static int iterator;
+       ...
+   };
+
+    那么T::iterator *iter会被编译器解释为两个数相乘。事实上，C++编译器会采用第二种解释方法
+   ，即使iterator的确是一个类型名。
+   为了避免这种矛盾，当我们适用qualified dependent name的时候，需要用typename来指出这是一个
+   类型名.即:
+   template <typename T> class Y
+   {
+       typename T::iterator *iter;
+       typedef typename T::iterator iterator; //定义了Y::iterator类型名称
+       ...
+   };
+   typename 指出下面紧跟着的名称是一个类型
+**/
+
+
+///萃取类型
+template<class T>
+struct myiter{
+    typedef T value_type; ///内嵌型别声明
+};
+template<class I>
+struct iterator_traits{   ///traits意味“特性”；
+    typedef typename I::value_type value_type;
+};
+template<class I>
+struct iterator_traits<I*>{   ///traits意味“特性”；
+    typedef I value_type;
+};
