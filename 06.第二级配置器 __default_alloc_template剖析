@@ -1,0 +1,74 @@
+/**
+SGI第二级配置器的做法是，如果区域块够大，超过128bytes时，就移交第一级配置器。当区块小于128bytes时，
+则内存池管理，此法又称为次层管理：每次配置一大块内存，并维护对应之自由链表，下次若再有相同大小的
+内存需求，就直接从free-list中拨出，如果客端释还小额区块，就由配置器回收到free-list中---是的，别忘
+了，配置器除了负责配置，也负责回收。为了方便管理，SGI第二级配置器会主动将任何小额区块的内存需求量
+上调至8的倍数(例如客端要求30bytes，就自动调整为32bytes)，并维护16个free-list,各自管理大小分别为8，
+16，24，32，40，48，56，64，72，80，88，96，104，112，120，128bytes的小额区块。free-list的节点结构
+如下：
+union obj{
+      union obj* free_list_link;
+      char client_data[1];
+};
+union介绍：union的大小为结构体中元素最大的大小。所以union中的元素会覆盖，都是从结构体的首地址开始
+写入的
+**/
+下面是第二级配置器的部分实现内容：
+enum{__ALIGN=8};   ///小型区块的上调边界
+enum{__MAX_BYTES=128};  ///小型区块的上限
+enum{__NFREELISTS=__MAX__BYTES/__ALIGN}; ///free-list 个数
+
+///以下是第二级配置器
+///注意，无“template型别参数”，且第二参数完全没派上用场
+///第一参数用于多线程环境下。本书步讨论多线程环境
+
+template<bool threads,int inst>
+class __default_alloc_template{
+private:
+    ///ROUND_UP()将bytes上调至8的倍数
+    static size_t ROUND_UP(size_t bytes){         ///对于二进制来说，8，16，24
+        return (((bytes)+__ALIGN-1)&~(__ALIGN-1));///每次+8，都是在二进制的第4位开始+的。前3位都是0.
+    }                                             ///所以，先加超，再把前3位变成0即可
+
+    union obj{
+        union obj *free_list_link;
+        char client_data[1];
+    };
+
+    ///16个free-list
+    static obj* volatile free_list[__NFREELISTS];
+    ///以下函数根据区块大小，决定使用第N号free-list。N从0起算
+    static size_t FREELIST_INDEX(size_t bytes){
+        return (((bytes)+__ALIGN-1)/__ALIGN-1);
+    }
+
+    ///返回一个大小为n的对象，并可能加入大小为n的其他区块到free list
+    static void *refill(size_t n);
+    ///配置一大块空间，可容纳nobjs个大小为size的区块
+    ///如果配置nobjs个区块有所不便，nobjs可能会降低
+    static char *chunk_alloc(size_t size,int &nobjs);
+
+    ///chunk allocation state
+    static char *start_free;///内存池起始位置。只在chunk_alloc()中变化
+    static char *end_free;///内存池结束位置。只在chunk_alloc()中变化
+    static size_t heap_size;
+
+public:
+    static void *allocate(size_t n){/**详述于后**/}
+    static void *deallocate(void *p,size_t n) {/**详述于后**/}
+    static void *reallocate(void *p,size_t old_size,size_t new_size);
+};
+
+///以下是static data member的定义与初值设定
+template<bool thread,int inst>
+char *__default_alloc_template<thread,inst>::start_free=0;
+
+template<bool thread,int inst>
+char *__default_alloc_template<thread,inst>::end_free=0;
+
+template<bool thread,int inst>
+size_t __default_alloc_template<thread,inst>::heap_size=0;
+
+template<bool thread,int inst>
+__default_alloc_template<thread,inst>::obj* volatile
+__default_alloc_template<thread,inst>::free_list[__NFREELISTS]={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
