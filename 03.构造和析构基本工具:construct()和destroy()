@@ -1,0 +1,34 @@
+template<class T1,class T2>
+inline void construct(T1* P,const T2& value){
+    new (p) T1(value);  ///定位new
+}
+
+///destroy()第一个版本，接受一个指针。
+template<class T>
+inline void destroy(T* pointer){
+    pointer->~T();
+}
+///以下是destroy()第二版本，接受两个迭代器。此函数设法找出元素的数值型别。
+///进而利用__type_traits<>求取最适当措施。
+template<class forwardIterator>
+inline void destroy(forwardIterator first,forwardIterator last){
+    __destroy(first,last,value_type(first));
+}
+
+///判断元素的数值型别（value type）是否有析构函数。
+template<class forwardIterator,class T>
+inline void __destroy(forwardIterator first,forwardIterator last,T*){
+    typedef typename __type_traits<T>::has_trivial_constructor trivial_destructor;
+    __destroy_aux(first,last,trivial_destructor());
+}
+
+///如果元素有自己设定的析构函数。
+template<class forwardIterator>
+inline void __destroy_aux(forwardIterator first,forwardIterator last,__false_type){
+    for(;first<last;++first)
+        destroy(first);
+}
+
+///如果元素没有自己设定的析构函数
+template<class forwardIterator>
+inline void __destroy_aux(forwardIterator,forwardIterator,__true_type){}
