@@ -1,0 +1,11 @@
+/**
+序列式容器有array,heap,vector,priority-queue,lis,slist,deque,stack,queue
+
+关联式容器有RB-TREE set,map,multiset,multimap,hashtable,hash_set,hash_map,hash_multiset,hash_multimap
+**/
+/**
+定义：
+所谓序列式容器，其中元素都可序，但未必有序。C++语言本身提供了一个序列式容器array，STL
+另外再提供vector,list,deque,stack,queue,priority-queue等等序列式容器。其中stacek和queue由于只
+是将deque改头换面而成，技术上被归类为一种配接器，但我仍把他们放在本章讨论。
+**/
